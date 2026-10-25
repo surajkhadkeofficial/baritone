@@ -85,9 +85,7 @@ allprojects {
         version rootProject.minecraft_version
 
         mappings {
-            intermediary()
             mojmap()
-            parchment("1.20.6", "2024.05.01")
 
             devFallbackNamespace "official"
         }
@@ -95,11 +93,7 @@ allprojects {
 
     tasks.withType(JavaCompile).configureEach {
         it.options.encoding = "UTF-8"
-
-        def targetVersion = project.java_version.toInteger()
-        if (JavaVersion.current().isJava9Compatible()) {
-            it.options.release = targetVersion
-        }
+        it.options.release = project.java_version.toInteger()
     }
 }
 

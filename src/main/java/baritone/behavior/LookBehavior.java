@@ -65,7 +65,17 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void updateTarget(Rotation rotation, boolean blockInteract) {
-        this.target = new Target(rotation, Target.Mode.resolve(ctx, blockInteract));
+        // Sanitize incoming rotation at the earliest possible point.
+        // This ensures that even if a calling process (mining, building, pathing)
+        // supplies an illegal pitch (> 90 or < -90), it gets clamped here before
+        // propagating anywhere. Vanilla servers and anti-cheats kick on illegal neck angles.
+        float yaw = rotation.getYaw();
+        float pitch = rotation.getPitch();
+        if (Float.isNaN(yaw) || Float.isInfinite(yaw)) yaw = 0f;
+        if (Float.isNaN(pitch) || Float.isInfinite(pitch)) pitch = 0f;
+        pitch = Math.max(-90f, Math.min(90f, pitch));
+        yaw = Rotation.normalizeYaw(yaw);
+        this.target = new Target(new Rotation(yaw, pitch), Target.Mode.resolve(ctx, blockInteract));
     }
 
     @Override
@@ -95,7 +105,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
                 }
 
                 this.prevRotation = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
-                final Rotation actual = this.processor.peekRotation(this.target.rotation);
+                // Always clamp & normalize before applying – prevents illegal neck/pitch rotations
+                // that anti-cheats and vanilla servers reject (pitch outside ±90 kicks the player)
+                final Rotation actual = sanitize(this.processor.peekRotation(this.target.rotation));
                 ctx.player().setYRot(actual.getYaw());
                 ctx.player().setXRot(actual.getPitch());
                 break;
@@ -169,10 +181,34 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     @Override
     public void onPlayerRotationMove(RotationMoveEvent event) {
         if (this.target != null) {
-            final Rotation actual = this.processor.peekRotation(this.target.rotation);
+            // Sanitize before sending to server – illegal pitch values cause kicks
+            final Rotation actual = sanitize(this.processor.peekRotation(this.target.rotation));
             event.setYaw(actual.getYaw());
             event.setPitch(actual.getPitch());
         }
+    }
+
+    /**
+     * Sanitize a rotation before applying it to the player or sending it to the server.
+     * <p>
+     * Minecraft / vanilla servers kick the client when:
+     * <ul>
+     *   <li>Pitch is outside [-90, 90] (illegal neck rotation)</li>
+     *   <li>Yaw or pitch contains NaN or Infinity</li>
+     * </ul>
+     * Anti-cheat plugins (Grim, Vulcan) also flag pitch > 90 or pitch < -90 as an immediate ban.
+     */
+    private static Rotation sanitize(Rotation r) {
+        float yaw = r.getYaw();
+        float pitch = r.getPitch();
+        // Guard NaN / Infinity – these would crash the server or cause a kick
+        if (Float.isNaN(yaw) || Float.isInfinite(yaw)) yaw = 0f;
+        if (Float.isNaN(pitch) || Float.isInfinite(pitch)) pitch = 0f;
+        // Clamp pitch to the legal range [-90, 90]
+        pitch = Math.max(-90f, Math.min(90f, pitch));
+        // Normalize yaw to [-180, 180] so it is never absurdly large
+        yaw = Rotation.normalizeYaw(yaw);
+        return new Rotation(yaw, pitch);
     }
 
     private static final class AimProcessor extends AbstractAimProcessor {
@@ -223,10 +259,28 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             desiredYaw += this.randomYawOffset;
             desiredPitch += this.randomPitchOffset;
 
-            return new Rotation(
-                    this.calculateMouseMove(prev.getYaw(), desiredYaw),
-                    this.calculateMouseMove(prev.getPitch(), desiredPitch)
-            ).clamp();
+            float newYaw = this.calculateMouseMove(prev.getYaw(), desiredYaw);
+            float newPitch = this.calculateMouseMove(prev.getPitch(), desiredPitch);
+
+            // Anti-cheat: clamp rotation speed to avoid inhuman snap-turns
+            float maxSpeed = Baritone.settings().antiCheatMaxRotationSpeed.value;
+            if (maxSpeed > 0) {
+                float yawDelta = newYaw - prev.getYaw();
+                float pitchDelta = newPitch - prev.getPitch();
+
+                // Normalize yaw delta to [-180, 180]
+                while (yawDelta > 180) yawDelta -= 360;
+                while (yawDelta < -180) yawDelta += 360;
+
+                if (Math.abs(yawDelta) > maxSpeed) {
+                    newYaw = prev.getYaw() + Math.signum(yawDelta) * maxSpeed;
+                }
+                if (Math.abs(pitchDelta) > maxSpeed) {
+                    newPitch = prev.getPitch() + Math.signum(pitchDelta) * maxSpeed;
+                }
+            }
+
+            return new Rotation(newYaw, newPitch).clamp();
         }
 
         @Override

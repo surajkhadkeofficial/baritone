@@ -821,6 +821,45 @@ public final class Settings {
     public final Setting<Boolean> antiCheatCompatibility = new Setting<>(true);
 
     /**
+     * Enable humanized timing jitter for block breaking, inventory moves, and right-clicks.
+     * When enabled, random delays are added to each action so the rhythm is not perfectly
+     * consistent, which is a common anti-cheat detection vector.
+     */
+    public final Setting<Boolean> antiCheatHumanizedTiming = new Setting<>(true);
+
+    /**
+     * Minimum extra ticks of random delay added to actions (block break, right-click, inventory move)
+     * when humanized timing is enabled.
+     */
+    public final Setting<Integer> antiCheatTimingJitterMin = new Setting<>(0);
+
+    /**
+     * Maximum extra ticks of random delay added to actions when humanized timing is enabled.
+     */
+    public final Setting<Integer> antiCheatTimingJitterMax = new Setting<>(3);
+
+    /**
+     * Maximum rotation speed in degrees per tick. Limits how fast the bot can turn its head.
+     * Anti-cheats flag extremely fast or instant rotations. Lower values are safer but slower.
+     * Set to 0 to disable the limit.
+     */
+    public final Setting<Float> antiCheatMaxRotationSpeed = new Setting<>(45.0f);
+
+    /**
+     * Add a random micro-pause before starting to break a block.
+     * The value is the percentage chance (0–100) of pausing for 1–3 extra ticks.
+     * This mimics the tiny hesitation a human player has before each break action.
+     */
+    public final Setting<Integer> antiCheatBreakPauseChance = new Setting<>(15);
+
+    /**
+     * Throttle sprint toggling to prevent rapid on/off sprinting that anti-cheats flag.
+     * The value is the minimum number of ticks between sprint state changes.
+     * Set to 0 to disable.
+     */
+    public final Setting<Integer> antiCheatSprintToggleCooldown = new Setting<>(10);
+
+    /**
      * Exclusively use cached chunks for pathing
      * <p>
      * Never turn this on

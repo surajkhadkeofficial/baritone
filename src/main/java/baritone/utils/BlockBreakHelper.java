@@ -1,25 +1,9 @@
-/*
- * This file is part of Baritone.
- *
- * Baritone is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Baritone is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package baritone.utils;
 
 import baritone.api.BaritoneAPI;
 import baritone.api.utils.IPlayerContext;
 import baritone.utils.accessor.IPlayerControllerMP;
+import baritone.utils.anticheat.HumanizedTimer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -54,6 +38,15 @@ public final class BlockBreakHelper {
             breakDelayTimer--;
             return;
         }
+
+        // Anti-cheat: random micro-pause before starting a new break
+        if (isLeftClick && !wasHitting && HumanizedTimer.isEnabled()) {
+            if (HumanizedTimer.shouldMicroPause(BaritoneAPI.getSettings().antiCheatBreakPauseChance.value)) {
+                breakDelayTimer = 1 + (int) (Math.random() * 3);
+                return;
+            }
+        }
+
         HitResult trace = ctx.objectMouseOver();
         boolean isBlockTrace = trace != null && trace.getType() == HitResult.Type.BLOCK;
 
@@ -68,8 +61,8 @@ public final class BlockBreakHelper {
                     ctx.player().swing(InteractionHand.MAIN_HAND);
                 }
                 if (ctx.playerController().hasBrokenBlock()) { // block broken this tick
-                    // break delay timer only applies for multi-tick block breaks like vanilla
-                    breakDelayTimer = BaritoneAPI.getSettings().blockBreakSpeed.value - BASE_BREAK_DELAY;
+                    // Use humanized delay instead of raw setting value
+                    breakDelayTimer = HumanizedTimer.blockBreakDelay() - BASE_BREAK_DELAY;
                     // must reset controller's destroy delay to prevent the client from delaying itself unnecessarily
                     ((IPlayerControllerMP) ctx.minecraft().gameMode).setDestroyDelay(0);
                 }
@@ -85,3 +78,4 @@ public final class BlockBreakHelper {
         }
     }
 }
+
